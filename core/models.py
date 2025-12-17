@@ -1,8 +1,5 @@
 """Модели данных: Zone, Driver, Order"""
-from dataclasses import dataclass
-from typing import Dict, List, Optional
 from core.enums import DriverStatus, OrderStatus
-
 import numpy as np
 import random
 from typing import Dict, List, Optional

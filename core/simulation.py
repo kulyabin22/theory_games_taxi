@@ -1,10 +1,8 @@
 """Основной класс симуляции"""
-from typing import Dict, List
 from core.models import Zone, Driver, Order
 from core.enums import DriverStatus, OrderStatus
-#from algorithms.pricing import update_surge_pricing
-#from algorithms.driver_strategy import decide_zone_move
-
+from algorithms.pricing import PricingStrategy
+from algorithms.driver_strategy import DriverStrategy
 import random
 from typing import Dict
 
@@ -123,7 +121,7 @@ class CitySimulation:
                 end_zone = random.choice(list(self.zones.values()))
 
                 # Рассчитываем цену
-                price = zone.calculate_order_price(end_zone)
+                price = PricingStrategy.calculate_order_price(zone, end_zone)
 
                 # Создаем заказ
                 order = Order(
@@ -149,7 +147,7 @@ class CitySimulation:
                             if d.current_zone == order.start_zone]
 
             for driver in zone_drivers:
-                if driver.decide_on_order(order):
+                if DriverStrategy.decide_on_order(driver, order):
                     driver.start_order(order)
                     free_drivers.remove(driver)
                     # print(f"{driver.name} принял {order}")
@@ -176,10 +174,11 @@ class CitySimulation:
         # Каждый свободный водитель решает, перемещаться ли
         for driver in self.drivers.values():
             if driver.status == DriverStatus.FREE:
-                target_zone = driver.decide_zone_move(
+                target_zone = DriverStrategy.decide_zone_move(
+                    driver,
                     list(self.zones.values()),
                     drivers_per_zone,
-                    available_orders_by_zone  # ← Передаем доступные заказы
+                    available_orders_by_zone # передаем доступные заказы
                 )
 
                 if target_zone and target_zone != driver.current_zone:
@@ -188,19 +187,7 @@ class CitySimulation:
 
     def update_surge_pricing(self) -> None:
         """Обновление динамического ценообразования"""
-        for zone in self.zones.values():
-            # Считаем количество свободных водителей в зоне
-            free_drivers = len([d for d in self.drivers.values()
-                                if d.current_zone == zone and
-                                d.status == DriverStatus.FREE])
-
-            # Рассчитываем соотношение спроса и предложения
-            demand = zone.base_demand_rate * zone.surge_multiplier
-            supply = max(1, free_drivers)
-            ratio = demand / supply
-
-            # Обновляем множитель цены
-            zone.update_surge_multiplier(ratio)
+        PricingStrategy.update_zones_pricing(self.zones, self.drivers)
 
     def cleanup_completed_orders(self) -> None:
         completed_ids = []

@@ -19,6 +19,7 @@ class CitySimulation:
         self.time: float = 0.0
         self.order_counter: int = 0
         self.driver_counter: int = 0
+        self.count_zones: int = 4
 
         # Создаем зоны города
         self._initialize_zones()
@@ -43,12 +44,16 @@ class CitySimulation:
             "Центр->Центр": 5,
             "Центр->Спальный район": 15,
             "Центр->Периферия": 25,
-            "Спальный район->Центр": 20,
-            "Спальный район->Спальный район": 8,
-            "Спальный район->Периферия": 18,
+            "Спальный район 1->Центр": 20,
+            "Спальный район 1->Спальный район 2": 8,
+            "Спальный район 1->Периферия": 18,
             "Периферия->Центр": 30,
             "Периферия->Спальный район": 22,
             "Периферия->Периферия": 12,
+            "Спальный район 2->Центр": 20,
+            "Спальный район 2->Спальный район 1": 8,
+            "Спальный район 2->Периферия": 18,
+            "Спальный район 2->Спальный район 2": 15
         }
 
         # Создаем зоны
@@ -64,7 +69,7 @@ class CitySimulation:
 
         self.zones[2] = Zone(
             id=2,
-            name="Спальный район",
+            name="Спальный район 1",
             base_demand_rate=0.8,  # БЫЛО 4.0, СТАЛО 0.8
             base_price_multiplier=1.0,
             surge_multiplier=1.0,
@@ -82,6 +87,16 @@ class CitySimulation:
             color="blue"
         )
 
+        self.zones[4] = Zone(
+            id=4,
+            name="Спальный район 2",
+            base_demand_rate=0.8,  # БЫЛО 4.0, СТАЛО 0.8
+            base_price_multiplier=1.0,
+            surge_multiplier=1.0,
+            travel_time_matrix=travel_times,
+            color="yellow"
+        )
+
     def _initialize_drivers(self) -> None:
         """Инициализация водителей"""
         driver_names = ["Аббасали", "Алексей", "Бексултан", "Чумабой", "Михаил",
@@ -91,7 +106,7 @@ class CitySimulation:
 
         # Создаем 15 водителей вместо 8
         for i, name in enumerate(driver_names[:15]):
-            zone_id = (i % 3) + 1
+            zone_id = (i % self.count_zones) + 1
             self.driver_counter += 1
             self.drivers[self.driver_counter] = Driver(
                 id=self.driver_counter,
@@ -142,11 +157,8 @@ class CitySimulation:
                         if d.status == DriverStatus.FREE]
 
         for order in pending_orders:
-            # Ищем свободных водителей в той же зоне
-            zone_drivers = [d for d in free_drivers
-                            if d.current_zone == order.start_zone]
 
-            for driver in zone_drivers:
+            for driver in free_drivers:
                 if DriverStrategy.decide_on_order(driver, order):
                     driver.start_order(order)
                     free_drivers.remove(driver)

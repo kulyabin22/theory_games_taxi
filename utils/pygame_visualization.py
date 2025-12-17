@@ -37,9 +37,10 @@ class PyGameVisualizer:
 
         # Позиции зон
         self.zone_positions = {
-            'Центр': (width // 2, height // 2),
-            'Спальный район': (width // 4, height // 4),
-            'Периферия': (3 * width // 4, 3 * height // 4)
+            'Центр': (3 * width // 5, height // 2),
+            'Спальный район 1': (width // 5, height // 2),
+            'Спальный район 2': (2 * width // 5, height // 2),
+            'Периферия': (4 * width // 5, height // 2)
         }
 
         self.clock = pygame.time.Clock()
@@ -55,7 +56,8 @@ class PyGameVisualizer:
         # Цвет зоны
         color_map = {
             'Центр': self.colors['zone_center'],
-            'Спальный район': self.colors['zone_residential'],
+            'Спальный район 1': self.colors['zone_residential'],
+            'Спальный район 2': self.colors['zone_residential'],
             'Периферия': self.colors['zone_periphery']
         }
 

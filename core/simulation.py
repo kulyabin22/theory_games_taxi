@@ -16,6 +16,7 @@ class CitySimulation:
         self.time: float = 0.0
         self.order_counter: int = 0
         self.driver_counter: int = 0
+        self.zones_count: int = 4
 
         # счетчики по минуте
         self.orders_completed_this_minute = 0
@@ -32,20 +33,31 @@ class CitySimulation:
 
     def _initialize_zones(self) -> None:
         travel_times = {
-            "Центр->Центр": 5,
-            "Центр->Спальный район": 10,
-            "Центр->Периферия": 15,
-            "Спальный район->Центр": 12,
-            "Спальный район->Спальный район": 8,
-            "Спальный район->Периферия": 7,
-            "Периферия->Центр": 17,
-            "Периферия->Спальный район": 9,
-            "Периферия->Периферия": 8,
+        "Центр->Центр": 5,
+        "Центр->Спальный район 1": 10,
+        "Центр->Спальный район 2": 10,
+        "Центр->Периферия": 15,
+
+        "Спальный район 1->Центр": 12,
+        "Спальный район 1->Спальный район 1": 8,
+        "Спальный район 1->Спальный район 2": 7,
+        "Спальный район 1->Периферия": 7,
+
+        "Спальный район 2->Центр": 12,
+        "Спальный район 2->Спальный район 1": 7,
+        "Спальный район 2->Спальный район 2": 8,
+        "Спальный район 2->Периферия": 7,
+
+        "Периферия->Центр": 17,
+        "Периферия->Спальный район 1": 9,
+        "Периферия->Спальный район 2": 9,
+        "Периферия->Периферия": 8,
         }
 
         self.zones[1] = Zone(1, "Центр", base_demand_rate=0.6, base_price_multiplier=1.2, surge_multiplier=1.0, travel_time_matrix=travel_times, color="red")
-        self.zones[2] = Zone(2, "Спальный район", base_demand_rate=0.25, base_price_multiplier=1.0, surge_multiplier=1.0, travel_time_matrix=travel_times, color="green")
+        self.zones[2] = Zone(2, "Спальный район 1", base_demand_rate=0.25, base_price_multiplier=1.0, surge_multiplier=1.0, travel_time_matrix=travel_times, color="green")
         self.zones[3] = Zone(3, "Периферия", base_demand_rate=0.1, base_price_multiplier=0.8, surge_multiplier=1.0, travel_time_matrix=travel_times, color="blue")
+        self.zones[4] = Zone(4,name="Спальный район 2",base_demand_rate=0.8,base_price_multiplier=1.0,surge_multiplier=1.0,travel_time_matrix=travel_times,color="yellow")
 
     def _initialize_drivers(self) -> None:
         driver_names = ["Аббасали", "Алексей", "Бексултан", "Чумабой", "Михаил",
@@ -53,7 +65,7 @@ class CitySimulation:
                         "Олег", "Абдуллох", "Борис", "Григорий", "Сухроб"]
 
         for i, name in enumerate(driver_names[:15]):
-            zone_id = (i % 3) + 1
+            zone_id = (i % self.zones_count) + 1
             self.driver_counter += 1
             self.drivers[self.driver_counter] = Driver(
                 id=self.driver_counter,

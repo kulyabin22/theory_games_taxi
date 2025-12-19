@@ -26,11 +26,49 @@ class DriverStrategy:
         if driver.status != DriverStatus.FREE:
             return False
         profit = DriverStrategy.calculate_expected_order_profit(driver, order)
-        threshold = float(driver.strategy_params.get("min_profit_threshold", 0.8))
+        threshold = float(driver.strategy_params.get("min_profit_threshold", 0.0))
         return profit >= threshold
 
     @staticmethod
-    def decide_zone_move(
+    def decide_zone_move(driver, zones, drivers_per_zone, available_orders_by_zone):
+        # Текущая зона
+        current = driver.current_zone
+
+        # Оценка всех зон
+        scores = {}
+        for zone in zones:
+            if zone == current:
+                continue
+
+            # Базовый доход (surge * базовая цена)
+            surge_bonus = zone.surge_multiplier ** 2  # Квадратичный бонус!
+
+            # Прогноз спроса (простейший - по текущим заказам)
+            forecast_demand = len(available_orders_by_zone[zone.id]) * 1.5
+
+            # Конкуренция (чем меньше водителей - тем лучше)
+            competition = max(1, drivers_per_zone.get(zone.id, 0))
+
+            # Время в пути
+            travel_cost = driver.current_zone.get_travel_time_to(zone) * driver.cost_per_minute
+
+            # Итоговый score
+            scores[zone] = (
+                    surge_bonus * forecast_demand / competition - travel_cost
+            )
+
+        # С вероятностью exploration_rate выбираем случайную зону
+        if random.random() < driver.strategy_params["exploration_rate"]:
+            return random.choice([z for z in zones if z != current])
+
+        # Иначе - лучшую по score
+        if scores:
+            best_zone = max(scores, key=scores.get)
+            if scores[best_zone] > 0:  # Только если это выгодно
+                return best_zone
+
+        return None  # Остаемся на месте
+    '''def decide_zone_move(
         driver: Driver,
         zones: List[Zone],
         drivers_in_zones: Dict[int, int],
@@ -85,4 +123,4 @@ class DriverStrategy:
             if best_score > 0.5:
                 return best_zone
 
-        return None
+        return None'''

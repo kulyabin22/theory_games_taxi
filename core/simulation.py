@@ -54,15 +54,15 @@ class CitySimulation:
         "Периферия->Периферия": 8,
         }
 
-        self.zones[1] = Zone(1, "Центр", base_demand_rate=0.6, base_price_multiplier=1.2, surge_multiplier=1.0, travel_time_matrix=travel_times, color="red")
-        self.zones[2] = Zone(2, "Спальный район 1", base_demand_rate=0.25, base_price_multiplier=1.0, surge_multiplier=1.0, travel_time_matrix=travel_times, color="green")
-        self.zones[3] = Zone(3, "Периферия", base_demand_rate=0.1, base_price_multiplier=0.8, surge_multiplier=1.0, travel_time_matrix=travel_times, color="blue")
-        self.zones[4] = Zone(4,name="Спальный район 2",base_demand_rate=0.20,base_price_multiplier=1.0,surge_multiplier=1.0,travel_time_matrix=travel_times,color="yellow")
+        self.zones[1] = Zone(1, "Центр", base_demand_rate=0.4, base_price_multiplier=1.2, surge_multiplier=1.0, travel_time_matrix=travel_times, color="red")
+        self.zones[2] = Zone(2, "Спальный район 1", base_demand_rate=0.15, base_price_multiplier=1.0, surge_multiplier=1.0, travel_time_matrix=travel_times, color="green")
+        self.zones[3] = Zone(3, "Периферия", base_demand_rate=0.05, base_price_multiplier=0.8, surge_multiplier=1.0, travel_time_matrix=travel_times, color="blue")
+        self.zones[4] = Zone(4,name="Спальный район 2",base_demand_rate=0.10,base_price_multiplier=1.0,surge_multiplier=1.0,travel_time_matrix=travel_times,color="yellow")
 
     def _initialize_drivers(self) -> None:
         driver_names = ["Аббасали", "Алексей", "Бексултан", "Чумабой", "Михаил",
                         "Пчелубель", "Чынасыл", "Владимир", "Бобир", "Николай",
-                        "Олег", "Абдуллох", "Борис", "Григорий", "Сухроб"]
+                        "Олег", "Абдуллох", "Борис", "Григорий", "Сухроб", "Ярослав", "Андрей", "Павел", "Сергей", "Алина", "Игорь"]
 
         for i, name in enumerate(driver_names[:15]):
             zone_id = (i % self.zones_count) + 1

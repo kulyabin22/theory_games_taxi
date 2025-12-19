@@ -27,7 +27,7 @@ class Zone:
         """
         MVP: спрос не зависит от surge (чтобы сначала проверить механику стимулов).
         """
-        lam = max(0.0, self.base_demand_rate * time_interval)
+        lam = max(0.0, self.base_demand_rate * time_interval/ max(1.0, self.surge_multiplier ** 0.7))
         return int(np.random.poisson(lam))
 
     def __hash__(self):
@@ -52,7 +52,7 @@ class Order:
         if self.estimated_duration is None:
             base = self.start_zone.get_travel_time_to(self.end_zone)
             # УМЕНЬШЕНО В 2 РАЗА для MVP
-            self.estimated_duration = max(3.0, (base + random.uniform(-1.0, 3.0)) * 0.5)
+            self.estimated_duration = max(3.0, (base + random.uniform(-1.0, 3.0))*0.5)
 
     def update(self, time_elapsed: float = 1.0, max_wait: float = 30.0) -> None:  # УВЕЛИЧЕНО до 30!
         if self.status == OrderStatus.PENDING:
@@ -83,7 +83,7 @@ class Driver:
     def __post_init__(self):
         defaults = {
             "min_profit_threshold": 0.0,   # MVP: без порога (или 0)
-            "exploration_rate": 0.05,      # немного шума
+            "exploration_rate": 0.1,      # немного шума
             "cost_per_minute": 0.2,
             "time_value_per_minute": 0.1,
         }

@@ -26,7 +26,7 @@ class DriverStrategy:
         if driver.status != DriverStatus.FREE:
             return False
         profit = DriverStrategy.calculate_expected_order_profit(driver, order)
-        threshold = float(driver.strategy_params.get("min_profit_threshold", 0.0))
+        threshold = float(driver.strategy_params.get("min_profit_threshold", 0.8))
         return profit >= threshold
 
     @staticmethod

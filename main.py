@@ -40,8 +40,8 @@ def zone_snapshot(sim: CitySimulation):
 
 
 def main():
-    random.seed(42)
-    np.random.seed(42)
+    random.seed()
+    np.random.seed()
 
     sim = CitySimulation()
 

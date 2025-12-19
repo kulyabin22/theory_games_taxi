@@ -1,0 +1,50 @@
+import sys
+import os
+
+PROJECT_ROOT = os.path.abspath("theory_games_taxi/theory_games_taxi-Lien")
+print("Correct project root:", PROJECT_ROOT)
+print("Contents:", os.listdir(PROJECT_ROOT))
+
+sys.path.insert(0, PROJECT_ROOT)
+print("sys.path[0]:", sys.path[0])
+
+from core.simulation import CitySimulation
+from utils.visualization_mvp import plot_surge, plot_drivers, animate_city
+
+sim = CitySimulation()
+print("OK")
+
+history = {
+    "surge": {z.id: [] for z in sim.zones.values()},
+    "drivers": {z.id: [] for z in sim.zones.values()},
+    "drivers_positions": []
+}
+
+minutes = 40
+
+for _ in range(minutes):
+    sim.run_iteration()
+
+    for z in sim.zones.values():
+        history["surge"][z.id].append(z.surge_multiplier)
+        history["drivers"][z.id].append(
+            sum(1 for d in sim.drivers.values() if d.current_zone == z)
+        )
+
+    history["drivers_positions"].append({
+        d.id: d.current_zone.id for d in sim.drivers.values()
+    })
+
+
+# График 1: динамика surge pricing
+plot_surge(history)
+
+# График 2: распределение водителей по зонам
+plot_drivers(history)
+
+animate_city(
+    history,
+    sim.zones,
+    interval=600,
+    filename="taxi_simulation.gif"
+)

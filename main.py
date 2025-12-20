@@ -117,7 +117,7 @@ def collect_simulation_history(sim, minutes):
             statuses[driver_id] = driver.status
         history["drivers_statuses"].append(statuses)
 
-        # Статистика заказовм
+        # Статистика заказов
         history["orders_created"].append(sim.orders_created_this_minute)
         history["orders_completed"].append(sim.orders_completed_this_minute)
         history["orders_cancelled"].append(sim.orders_cancelled_this_minute)

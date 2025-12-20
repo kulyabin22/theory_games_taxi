@@ -83,7 +83,7 @@ class Driver:
     def __post_init__(self):
         defaults = {
             "min_profit_threshold": 0.0,   # MVP: без порога (или 0)
-            "exploration_rate": 0.1,      # немного шума
+            "exploration_rate": 0.05,      # немного шума
             "cost_per_minute": 0.2,
             "time_value_per_minute": 0.1,
         }

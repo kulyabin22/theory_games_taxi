@@ -3,18 +3,19 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from matplotlib.patches import Circle, Rectangle
 import numpy as np
-from core.models import Zone, Driver, DriverStatus
-from core import CitySimulation
+from core.models import Zone, Driver, DriverStatus, OrderStatus
 
 
 class TaxiSimulationVisualizer:
     """Визуализатор симуляции такси"""
 
-    def __init__(self, simulation):
+    def __init__(self, simulation, history=None):
         self.simulation = simulation
+        self.history = history
         self.fig, self.ax = plt.subplots(figsize=(12, 8))
         self.time_text = None
         self.stats_text = None
+        self.current_frame = 0
 
         # Цвета для зон
         self.zone_colors = {
@@ -31,6 +32,10 @@ class TaxiSimulationVisualizer:
             'Спальный район 2': (0.8, 0.2),
             'Периферия': (0.8, 0.8)
         }
+
+        # Сопоставление id зон с именами
+        self.zone_id_to_name = {zone.id: zone.name for zone in simulation.zones.values()}
+        self.zone_name_to_id = {zone.name: zone.id for zone in simulation.zones.values()}
 
     def setup_plot(self):
         """Настройка графика"""
@@ -55,17 +60,17 @@ class TaxiSimulationVisualizer:
                          fontsize=12, fontweight='bold',
                          ha='center', va='center')
 
-            # surge множитель
-            zone = next((z for z in self.simulation.zones.values()
-                         if z.name == zone_name), None)
-            if zone:
-                self.ax.text(x, y - 0.15, f'Цена: x{zone.surge_multiplier:.2f}',
+            # surge множитель (будем обновлять в кадрах)
+            zone_id = self.zone_name_to_id.get(zone_name)
+            if zone_id and self.history and self.current_frame < len(self.history['timestamps']):
+                surge = self.history['surge'][zone_id][self.current_frame]
+                self.ax.text(x, y - 0.15, f'Цена: x{surge:.2f}',
                              fontsize=10, ha='center', va='center',
                              bbox=dict(boxstyle="round,pad=0.3",
                                        facecolor="yellow", alpha=0.7))
 
     def update_animation(self, frame):
-        """Обновление кадра анимации"""
+        """Обновление кадра анимации (режим реального времени)"""
         self.setup_plot()
 
         # Запускаем одну минуту симуляции
@@ -85,7 +90,7 @@ class TaxiSimulationVisualizer:
                      f"Заказы: {stats['active_orders']} активных, "
                      f"{stats['completed_orders']} выполнено")
 
-        self.stats_text = self.ax.text(0.02, 0.9, stats_str,
+        self.stats_text = self.ax.text(0.02, 0.8, stats_str,
                                        fontsize=10, transform=self.ax.transAxes,
                                        bbox=dict(boxstyle="round,pad=0.5",
                                                  facecolor="lightblue", alpha=0.8))
@@ -98,8 +103,44 @@ class TaxiSimulationVisualizer:
 
         return []
 
+    def update_animation_from_history(self, frame):
+        """Обновление кадра анимации из истории"""
+        self.current_frame = frame
+        self.setup_plot()
+
+        # Время
+        if self.history and frame < len(self.history['timestamps']):
+            current_time = int(self.history['timestamps'][frame])
+            self.time_text = self.ax.text(0.02, 0.98, f'Время: {current_time} мин',
+                                          fontsize=12, transform=self.ax.transAxes,
+                                          bbox=dict(boxstyle="round,pad=0.5",
+                                                    facecolor="white", alpha=0.8))
+
+            # Статистика
+            free_drivers_total = sum(self.history['drivers'][zone_id][frame]
+                                     for zone_id in self.history['drivers'])
+
+            stats_str = (f"Минута: {current_time}\n"
+                         f"Создано заказов: {self.history['orders_created'][frame]}\n"
+                         f"Выполнено: {self.history['orders_completed'][frame]}\n"
+                         f"Отменено: {self.history['orders_cancelled'][frame]}\n"
+                         f"Свободных водителей: {free_drivers_total}")
+
+            self.stats_text = self.ax.text(0.02, 0.80, stats_str,
+                                           fontsize=10, transform=self.ax.transAxes,
+                                           bbox=dict(boxstyle="round,pad=0.5",
+                                                     facecolor="lightblue", alpha=0.8))
+
+            # Рисуем водителей из истории
+            self.draw_drivers_from_history(frame)
+
+            # Рисуем заказы из истории
+            self.draw_orders_from_history(frame)
+
+        return []
+
     def draw_drivers(self):
-        """Рисование водителей"""
+        """Рисование водителей (режим реального времени)"""
         for driver in self.simulation.drivers.values():
             zone_name = driver.current_zone.name
             if zone_name in self.zone_positions:
@@ -143,8 +184,55 @@ class TaxiSimulationVisualizer:
                              f"${driver.total_earnings:.0f}",
                              fontsize=7, ha='center', va='center')
 
+    def draw_drivers_from_history(self, frame):
+        """Рисование водителей из истории"""
+        if not self.history or frame >= len(self.history['drivers_positions']):
+            return
+
+        drivers_positions = self.history['drivers_positions'][frame]
+        drivers_statuses = self.history['drivers_statuses'][frame] if frame < len(
+            self.history['drivers_statuses']) else {}
+
+        for i, (driver_id, zone_id) in enumerate(drivers_positions.items()):
+            zone_name = self.zone_id_to_name.get(zone_id)
+            if zone_name in self.zone_positions:
+                x, y = self.zone_positions[zone_name]
+
+                # Смещаем позицию чтобы водители не накладывались
+                offset_x = (i % 5) * 0.05 - 0.1
+                offset_y = (i // 5) * 0.05 - 0.05
+
+                # Цвет водителя в зависимости от статуса
+                status = drivers_statuses.get(driver_id, DriverStatus.FREE)
+                if status == DriverStatus.FREE:
+                    color = 'green'
+                    marker = 'o'
+                    size = 80
+                elif status == DriverStatus.BUSY:
+                    color = 'red'
+                    marker = 's'  # квадрат
+                    size = 100
+                elif status == DriverStatus.MOVING:
+                    color = 'orange'
+                    marker = '^'  # треугольник
+                    size = 90
+                else:
+                    color = 'gray'
+                    marker = 'o'
+                    size = 80
+
+                # Рисуем водителя
+                self.ax.scatter(x + offset_x, y + offset_y,
+                                c=color, marker=marker, s=size,
+                                edgecolors='black', linewidth=1)
+
+                # ID водителя
+                self.ax.text(x + offset_x, y + offset_y + 0.03,
+                             f"D{driver_id}",  # ID водителя
+                             fontsize=8, ha='center', va='center')
+
     def draw_orders(self):
-        """Рисование заказов"""
+        """Рисование заказов (режим реального времени)"""
         for order in self.simulation.orders.values():
             if order.status.value == 'ожидает водителя':  # Только ожидающие
                 start_zone = order.start_zone.name
@@ -173,10 +261,58 @@ class TaxiSimulationVisualizer:
                                  bbox=dict(boxstyle="round,pad=0.2",
                                            facecolor="white", alpha=0.7))
 
+    def draw_orders_from_history(self, frame):
+        """Рисование заказов из истории"""
+        if not self.history or frame >= len(self.history['orders']):
+            return
+
+        for order_data in self.history['orders'][frame]:
+            if order_data['status'] == OrderStatus.PENDING:
+                start_zone_id = order_data['start_zone_id']
+                end_zone_id = order_data['end_zone_id']
+
+                start_zone_name = self.zone_id_to_name.get(start_zone_id)
+                end_zone_name = self.zone_id_to_name.get(end_zone_id)
+
+                if start_zone_name in self.zone_positions and end_zone_name in self.zone_positions:
+                    x1, y1 = self.zone_positions[start_zone_name]
+                    x2, y2 = self.zone_positions[end_zone_name]
+
+                    # Стрелка заказа
+                    self.ax.annotate('',
+                                     xy=(x2, y2), xycoords='data',
+                                     xytext=(x1, y1), textcoords='data',
+                                     arrowprops=dict(arrowstyle="->",
+                                                     color="purple",
+                                                     alpha=0.5,
+                                                     lw=2,
+                                                     connectionstyle="arc3,rad=0.2"))
+
+                    # Цена заказа
+                    mid_x = (x1 + x2) / 2
+                    mid_y = (y1 + y2) / 2
+                    self.ax.text(mid_x, mid_y + 0.02,
+                                 f"${order_data['price']:.0f}",
+                                 fontsize=8, ha='center', va='center',
+                                 bbox=dict(boxstyle="round,pad=0.2",
+                                           facecolor="white", alpha=0.7))
+
     def animate(self, frames=60, interval=500):
-        """Запуск анимации"""
+        """Запуск анимации в реальном времени"""
         ani = animation.FuncAnimation(self.fig, self.update_animation,
                                       frames=frames, interval=interval,
+                                      blit=False, repeat=False)
+        plt.show()
+
+    def animate_from_history(self, frames=60, interval=400):
+        """Запуск анимации из истории"""
+        if not self.history:
+            print("❌ История не предоставлена для анимации")
+            return
+
+        actual_frames = min(frames, len(self.history['timestamps']))
+        ani = animation.FuncAnimation(self.fig, self.update_animation_from_history,
+                                      frames=actual_frames, interval=interval,
                                       blit=False, repeat=False)
         plt.show()
 

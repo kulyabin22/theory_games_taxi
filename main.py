@@ -338,9 +338,9 @@ def main_simulation():
     print(f"Заработок всего: {stats['total_earnings']:.2f}")
     print(f"Средний заработок: {stats['avg_earnings']:.2f}")
     print(f"Создано/выполн/отмен: {sim.total_created_orders}/{sim.total_completed_orders}/{sim.total_cancelled_orders}")
-
+    #print(sim.total_created_orders)
     if sim.total_created_orders:
-        print(f"Выполнение: {100.0 * sim.total_completed_orders / sim.total_completed_orders:.1f}%")
+        print(f"Выполнение: {100.0 * sim.total_completed_orders / sim.total_created_orders:.1f}%")
         print(f"Отмена:     {100.0 * sim.total_cancelled_orders / sim.total_created_orders:.1f}%")
 
     print("\nТоп-5 водителей по заработку:")

@@ -1,10 +1,7 @@
-# utils/visualization.py
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from matplotlib.patches import Circle, Rectangle
-import numpy as np
-from core.models import Zone, Driver, DriverStatus, OrderStatus
-
+from core import DriverStatus, OrderStatus, CitySimulation
 
 class TaxiSimulationVisualizer:
     """Визуализатор симуляции такси"""

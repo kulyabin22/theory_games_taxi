@@ -1,7 +1,6 @@
 """Стратегии принятия решений водителями (MVP)"""
 import random
-from typing import Dict, List, Optional
-from core.models import Zone, Driver, Order
+from core.models import Driver, Order
 from core.enums import DriverStatus
 
 

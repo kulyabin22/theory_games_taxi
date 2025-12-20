@@ -1,3 +1,4 @@
+# utils/statistics.py
 """
 Аналитика покрытия зон города - отслеживание ZCI во времени
 """
@@ -9,8 +10,10 @@ from datetime import datetime
 import random
 import os
 
-from core import CitySimulation
+# Изменяем импорт - импортируем напрямую из модуля, а не из пакета
+from core.simulation import CitySimulation
 from core.enums import OrderStatus
+from core.models import Zone
 
 
 class CoverageAnalytics:
@@ -48,7 +51,8 @@ class CoverageAnalytics:
                 'pending_orders': [],  # Ожидающие заказы
                 'wait_time': [],  # Среднее время ожидания
                 'busy_drivers': [],  # Занятые водители
-                'surge_multiplier': []  # Множитель цены
+                'surge_multiplier': [],  # Множитель цены
+                'completed_ratio': [] # Выполняемость заказов
             }
 
     def collect_current_metrics(self) -> Dict:
@@ -78,10 +82,20 @@ class CoverageAnalytics:
             coverage_ratio = free_drivers / max(1, len(pending_orders))
 
             # Среднее время ожидания
-            avg_wait_time = sum(o.waiting_time for o in pending_orders) / max(1, len(pending_orders))
+            if len(pending_orders) > 0:
+                avg_wait_time = sum(o.waiting_time for o in pending_orders) / len(pending_orders)
+            else:
+                avg_wait_time = 0
 
             # Рассчитываем ZCI (упрощенная версия)
             zci = self._calculate_zci(coverage_ratio, avg_wait_time, len(pending_orders))
+
+            # Выполняемость заказов в процентах
+            final_orders = self.simulation.zone_order_stats[zone.id]['completed'] + self.simulation.zone_order_stats[zone.id]['cancelled']
+            if final_orders == 0:
+                completed_ratio = 0
+            else:
+                completed_ratio = self.simulation.zone_order_stats[zone.id]['completed'] / final_orders * 100
 
             # Сохраняем данные
             self.history['zones'][zone_name]['zci'].append(zci)
@@ -91,6 +105,7 @@ class CoverageAnalytics:
             self.history['zones'][zone_name]['wait_time'].append(avg_wait_time)
             self.history['zones'][zone_name]['busy_drivers'].append(busy_drivers)
             self.history['zones'][zone_name]['surge_multiplier'].append(zone.surge_multiplier)
+            self.history['zones'][zone_name]['completed_ratio'].append(completed_ratio)
 
         # Собираем общие метрики города
         city_metrics = self._calculate_city_metrics()
@@ -136,23 +151,23 @@ class CoverageAnalytics:
         """
         # Собираем ZCI всех зон
         all_zci = []
-        for zone_name in self.simulation.zones.values():
-            if self.history['zones'][zone_name.name]['zci']:
-                all_zci.append(self.history['zones'][zone_name.name]['zci'][-1])
+        for zone_name in self.history['zones']:
+            if self.history['zones'][zone_name]['zci']:
+                all_zci.append(self.history['zones'][zone_name]['zci'][-1])
 
         if not all_zci:
             return {}
 
         # Рассчитываем неравенство покрытия (стандартное отклонение)
-        zci_std = np.std(all_zci)
+        zci_std = float(np.std(all_zci))
 
         # Процент зон с проблемами
         problematic_zones = sum(1 for zci in all_zci if zci < 60)
 
         return {
-            'avg_zci': np.mean(all_zci),
-            'min_zci': np.min(all_zci),
-            'max_zci': np.max(all_zci),
+            'avg_zci': float(np.mean(all_zci)),
+            'min_zci': float(np.min(all_zci)),
+            'max_zci': float(np.max(all_zci)),
             'zci_std': zci_std,
             'problematic_zones': problematic_zones,
             'problematic_percentage': problematic_zones / len(all_zci) * 100
@@ -174,7 +189,7 @@ class CoverageAnalytics:
         # 1. Основной график: ZCI по времени
         ax1 = axes[0, 0]
 
-        colors = plt.cm.Set2(np.linspace(0, 1, len(self.simulation.zones)))
+        colors = plt.cm.Set2(np.linspace(0, 1, len(self.history['zones'])))
 
         for idx, (zone_name, zone_data) in enumerate(self.history['zones'].items()):
             if zone_data['zci']:
@@ -336,46 +351,47 @@ class CoverageAnalytics:
         ax3.grid(True, alpha=0.3)
         ax3.set_ylim(0, 105)
 
-        # 4. Heatmap ZCI по зонам (в конце симуляции)
+        # 4. График: Зоны c выполняемостью заказов в процентах
         ax4 = axes[1, 1]
 
-        # Получаем последние значения ZCI для каждой зоны
-        final_zci = {}
+        # Получаем текущие значения ZCI для всех зон
+        current_comp = []
+        zone_names = []
         for zone_name, zone_data in self.history['zones'].items():
-            if zone_data['zci']:
-                final_zci[zone_name] = zone_data['zci'][-1]
+            if zone_data['completed_ratio']:
+                current_comp.append(zone_data['completed_ratio'][-1])
+                zone_names.append(zone_name)
 
-        if final_zci:
-            zones = list(final_zci.keys())
-            zci_values = list(final_zci.values())
-
-            # Создаем цветовую карту в зависимости от значения ZCI
-            colors = []
-            for value in zci_values:
-                if value >= 80:
-                    colors.append('green')
-                elif value >= 60:
-                    colors.append('yellow')
-                else:
-                    colors.append('red')
-
-            bars = ax4.bar(zones, zci_values, color=colors, edgecolor='black')
+        if current_comp:
+            # Создаем столбчатую диаграмму
+            bars = ax4.bar(zone_names, current_comp, color=plt.cm.viridis(np.linspace(0, 1, len(zone_names))))
 
             # Добавляем значения на столбцы
-            for bar in bars:
+            for bar, zci in zip(bars, current_comp):
                 height = bar.get_height()
-                ax4.text(bar.get_x() + bar.get_width() / 2., height + 1,
-                         f'{height:.1f}', ha='center', va='bottom')
+                ax4.text(bar.get_x() + bar.get_width()/2, height + 1,
+                        f'{zci:.1f}', ha='center', va='bottom', fontweight='bold')
 
-            ax4.axhline(y=80, color='darkgreen', linestyle='--', alpha=0.5, label='Отлично')
-            ax4.axhline(y=60, color='darkorange', linestyle='--', alpha=0.5, label='Удовлетв.')
+            # Горизонтальные линии для уровней ZCI
+            ax4.axhline(y=90, color='green', linestyle='--', alpha=0.5, label='Отлично (>90)')
+            ax4.axhline(y=75, color='yellow', linestyle='--', alpha=0.5, label='Хорошо (75-90)')
+            ax4.axhline(y=60, color='orange', linestyle='--', alpha=0.5, label='Удовл. (60-75)')
+            ax4.axhline(y=40, color='red', linestyle='--', alpha=0.5, label='Проблемы (<60)')
 
             ax4.set_xlabel('Зоны')
-            ax4.set_ylabel('ZCI')
-            ax4.set_title('ZCI по зонам (финальные значения)')
-            ax4.legend(loc='lower right')
+            ax4.set_ylabel('Текущий ZCI')
+            ax4.set_title('Текущий ZCI по зонам')
+            ax4.legend(loc='upper right')
             ax4.grid(True, alpha=0.3, axis='y')
             ax4.set_ylim(0, 105)
+
+            # Поворачиваем подписи зон если нужно
+            if len(zone_names) > 4:
+                plt.setp(ax4.get_xticklabels(), rotation=45, ha='right')
+        else:
+            ax4.text(0.5, 0.5, 'Нет данных о ZCI',
+                     ha='center', va='center', transform=ax4.transAxes, fontsize=12)
+            ax4.set_title('Текущий ZCI по зонам')
 
         plt.tight_layout()
 
@@ -386,6 +402,7 @@ class CoverageAnalytics:
             print(f"Сводный график сохранен: {filename}")
 
         plt.show()
+
 
 def run_analysis():
     """
@@ -405,7 +422,7 @@ def run_analysis():
     analytics = CoverageAnalytics(sim, save_path="coverage_analysis")
 
     # Запускаем симуляцию на N минут
-    minutes = 50
+    minutes = 60
 
     for i in range(minutes):
         print(f"\nМинута {i + 1}/{minutes}")

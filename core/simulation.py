@@ -17,6 +17,8 @@ class CitySimulation:
         self.order_counter: int = 0
         self.driver_counter: int = 0
         self.zones_count: int = 4
+        self.next_driver_id = 1
+        self.next_order_id = 1
 
         # счетчики по минуте
         self.orders_completed_this_minute = 0
@@ -27,6 +29,9 @@ class CitySimulation:
         self.total_created_orders = 0
         self.total_completed_orders = 0
         self.total_cancelled_orders = 0
+
+        # Добавляем статистику выполнения заказов по зонам
+        self.zone_order_stats = {}  # Будет инициализирована в _initialize_zones
 
         self._initialize_zones()
         self._initialize_drivers()
@@ -54,10 +59,19 @@ class CitySimulation:
         "Периферия->Периферия": 8,
         }
 
-        self.zones[1] = Zone(1, "Центр", base_demand_rate=0.4, base_price_multiplier=1.2, surge_multiplier=1.0, travel_time_matrix=travel_times, color="red")
-        self.zones[2] = Zone(2, "Спальный район 1", base_demand_rate=0.15, base_price_multiplier=1.0, surge_multiplier=1.0, travel_time_matrix=travel_times, color="green")
-        self.zones[3] = Zone(3, "Периферия", base_demand_rate=0.05, base_price_multiplier=0.8, surge_multiplier=1.0, travel_time_matrix=travel_times, color="blue")
-        self.zones[4] = Zone(4,name="Спальный район 2",base_demand_rate=0.10,base_price_multiplier=1.0,surge_multiplier=1.0,travel_time_matrix=travel_times,color="yellow")
+        self.zones[1] = Zone(1, "Центр", base_demand_rate=0.6, base_price_multiplier=1.2, surge_multiplier=1.0, travel_time_matrix=travel_times, color="red")
+        self.zones[2] = Zone(2, "Спальный район 1", base_demand_rate=0.25, base_price_multiplier=1.0, surge_multiplier=1.0, travel_time_matrix=travel_times, color="green")
+        self.zones[3] = Zone(3, "Периферия", base_demand_rate=0.1, base_price_multiplier=0.8, surge_multiplier=1.0, travel_time_matrix=travel_times, color="blue")
+        self.zones[4] = Zone(4,name="Спальный район 2",base_demand_rate=0.2,base_price_multiplier=1.0,surge_multiplier=1.0,travel_time_matrix=travel_times,color="yellow")
+
+        # Инициализируем статистику по зонам
+        for zone in self.zones.values():
+            self.zone_order_stats[zone.id] = {
+                'created': 0,
+                'completed': 0,
+                'cancelled': 0,
+                'active': 0
+            }
 
     def _initialize_drivers(self) -> None:
         driver_names = ["Аббасали", "Алексей", "Бексултан", "Чумабой", "Михаил",
@@ -76,30 +90,35 @@ class CitySimulation:
             )
 
     def generate_orders(self) -> None:
-        """УПРОЩЕННАЯ версия - только базовый спрос"""
-        created_now = 0
-        
+        """Генерация новых заказов"""
         for zone in self.zones.values():
-            # Только базовый спрос
-            num_orders = int(np.random.poisson(zone.base_demand_rate))
-            
+            # Генерируем заказы на основе спроса
+            num_orders = zone.generate_demand()
+
             for _ in range(num_orders):
-                self.order_counter += 1
-                end_zone = random.choice(list(self.zones.values()))
-                price = PricingStrategy.calculate_order_price(zone, end_zone)
-                
+                # Выбираем случайную зону назначения
+                possible_destinations = [z for z in self.zones.values() if z != zone]
+                dest_zone = random.choice(possible_destinations)
+
+                # Рассчитываем цену с учетом surge
+                price = PricingStrategy.calculate_order_price(zone, dest_zone)
+
+                # Создаем заказ
                 order = Order(
-                    id=self.order_counter,
+                    id=self.next_order_id,
                     start_zone=zone,
-                    end_zone=end_zone,
+                    end_zone=dest_zone,
                     price=price,
                     created_time=self.time
                 )
-                self.orders[self.order_counter] = order
-                created_now += 1
-        
-        self.total_created_orders += created_now
-        self.orders_created_this_minute = created_now
+
+                self.orders[order.id] = order
+                self.next_order_id += 1
+
+                # Обновляем статистику - заказ создан в этой зоне
+                self.total_created_orders += 1
+                self.zone_order_stats[zone.id]['created'] += 1
+                self.zone_order_stats[zone.id]['active'] += 1
 
     def match_orders_to_drivers(self) -> None:
         pending_orders = [o for o in self.orders.values() if o.status == OrderStatus.PENDING]
@@ -159,14 +178,20 @@ class CitySimulation:
 
         PricingStrategy.update_zones_pricing(self.zones, self.drivers, pending_by_zone=pending_by_zone)
 
-    def cleanup_completed_orders(self) -> None:
+    def update_orders(self) -> None:
         to_delete = []
         for oid, order in self.orders.items():
             if order.status == OrderStatus.COMPLETED:
                 self.total_completed_orders += 1
+                # Увеличиваем счетчик выполненных заказов для зоны назначения
+                self.zone_order_stats[order.end_zone.id]['active'] -= 1
+                self.zone_order_stats[order.start_zone.id]['completed'] += 1
                 to_delete.append(oid)
             elif order.status == OrderStatus.CANCELLED:
                 self.total_cancelled_orders += 1
+                # Увеличиваем счетчик отмененных заказов для стартовой зоны
+                self.zone_order_stats[order.start_zone.id]['cancelled'] += 1
+                self.zone_order_stats[order.start_zone.id]['active'] -= 1
                 to_delete.append(oid)
 
         for oid in to_delete:
@@ -212,7 +237,7 @@ class CitySimulation:
         self.update_surge_pricing()
 
         # 7) очистка завершенных/отмененных
-        self.cleanup_completed_orders()
+        self.update_orders()
 
         self.time += time_step
 
@@ -260,6 +285,29 @@ class CitySimulation:
                 for zone in self.zones.values()
             }
         }
+
+    def get_zone_order_completion_stats(self) -> Dict:
+        """Получить статистику выполнения заказов по зонам"""
+        stats = {}
+        for zone_id, zone_stats in self.zone_order_stats.items():
+            zone_name = self.zones[zone_id].name
+            total_finished = zone_stats['completed'] + zone_stats['cancelled']
+
+            if total_finished > 0:
+                completion_rate = (zone_stats['completed'] / total_finished) * 100
+            else:
+                completion_rate = 0
+
+            stats[zone_name] = {
+                'created': zone_stats['created'],
+                'completed': zone_stats['completed'],
+                'cancelled': zone_stats['cancelled'],
+                'active': zone_stats['active'],
+                'total_finished': total_finished,
+                'completion_rate': completion_rate
+            }
+
+        return stats
 
     def print_status(self) -> None:
         stats = self.get_statistics()
@@ -372,8 +420,8 @@ class CitySimulation:
             elif stats["balance"] == "ИЗБЫТОК":
                 print(f"  • {zone_name}: Слишком много свободных водителей ({stats['free_drivers']}), можно перераспределить")
 if __name__ == "__main__":
-    random.seed(42)
-    np.random.seed(42)
+    random.seed()
+    np.random.seed()
 
     sim = CitySimulation()
     minutes = 50
@@ -391,4 +439,3 @@ if __name__ == "__main__":
         print(f"Процент выполнения: {100 * sim.total_completed_orders / sim.total_created_orders:.1f}%")
 
 
-    

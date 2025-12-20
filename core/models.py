@@ -54,7 +54,7 @@ class Order:
             # УМЕНЬШЕНО В 2 РАЗА для MVP
             self.estimated_duration = max(3.0, (base + random.uniform(-1.0, 3.0))*0.5)
 
-    def update(self, time_elapsed: float = 1.0, max_wait: float = 30.0) -> None:  # УВЕЛИЧЕНО до 30!
+    def update(self, time_elapsed: float = 1.0, max_wait: float = 5.0) -> None:  # УВЕЛИЧЕНО до 30!
         if self.status == OrderStatus.PENDING:
             self.waiting_time += time_elapsed
             if self.waiting_time >= max_wait:
